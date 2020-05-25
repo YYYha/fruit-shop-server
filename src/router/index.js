@@ -4,6 +4,7 @@ const router = new Router()
 const Ctypto = require('../../libs/md5/index')
 const getCode = require('../../libs/email_config/index')
 const Jwt = require('../../libs/token/index')
+const { getId } = require('../../libs/getId/index')
 
 router.get('/', async ctx => {
     let data = await db.query('select * from test')
@@ -49,19 +50,24 @@ router.post('/register', async ctx => {
     let data = ctx.request.fields
     // 查找有无此用户
     let nouser = await db.query(`select username, isLive from user where username = '${data.username}'`)
-    let n = JSON.parse(JSON.stringify(nouser))[0] || Array
-    console.log(n)
-    if (n.length !== 0) {
-        if (n.username.length !== 0 && n.isLive == 'yes') {
-            ctx.body = {
-                code: 1,
-                msg: '此用户名已被注册'
-            }
+    let n = JSON.parse(JSON.stringify(nouser))[0] || Array()
+    try {
+        if(n.length === 0){
+            ctx.body = {code: 1, msg: '请获取邮箱验证码'}
             return
+        }else if (n.length !== 0) {
+            if (n.username.length !== 0 && n.isLive == 'yes') {
+                ctx.body = {
+                    code: 1,
+                    msg: '此用户名已被注册'
+                }
+                return
+            }
         }
+    } catch (error) {
+        console.log(error)
     }
-
-
+    
     // 验证认证码)(如果没有此人的记录，则在上面已经return出去了)
     let Confirm = await db.query(`select date, code from user where email = '${data.email}'`)
     let confirm = JSON.parse(JSON.stringify(Confirm))[0] || []
@@ -94,6 +100,7 @@ router.post('/register', async ctx => {
 // 获取验证码
 router.post('/getCode', async ctx => {
     let data = ctx.request.fields
+    console.log(data)
     let id = Math.floor(Math.random() * 10000)
     // 查找有无重复用户
     let noemail = await db.query(`select isLive, email from user where email = '${data.email}'`)
@@ -174,20 +181,20 @@ router.get('/goodsDetail', async ctx => {
 router.post('/isAddNum', async ctx => {
     let isAdd = ctx.request.fields.isAdd
     let cartId = ctx.request.fields.cartId
-
-    let result = await db.query(`select goodsNum from shoppingCart where id = ${cartId}`)
+    console.log(cartId)
+    let result = await db.query(`select goodsNum from shoppingcart where id = ${cartId}`)
     let goodsNum = result[0].goodsNum
     try {
         if (isAdd) {
             goodsNum = goodsNum + 1
-            let result = await db.query(`update shoppingCart set goodsNum = ${goodsNum} where id = ${cartId}`)
+            let result = await db.query(`update shoppingcart set goodsNum = ${goodsNum} where id = ${cartId}`)
             ctx.body = {
                 code: 0,
                 msg: '增加成功'
             }
         } else {
             goodsNum = goodsNum - 1
-            let result = await db.query(`update shoppingCart set goodsNum = ${goodsNum} where id = ${cartId}`)
+            let result = await db.query(`update shoppingcart set goodsNum = ${goodsNum} where id = ${cartId}`)
             ctx.body = {
                 code: 0,
                 msg: '增加成功'
@@ -242,31 +249,22 @@ router.get('/shoppingCartDel', async ctx => {
 })
 // 添加购物车
 router.post('/addShoppingCart', async ctx => {
-    function getId() {
-        var id = Math.ceil(Math.random() * 10000)
-        if (id.toString().length !== 4) {
-            getId()
-        } else {
-            return id
-        }
-    }
-
     let token = ctx.request.header.authorization
     let jwt = new Jwt(token)
     let user = await jwt.verifyToken()
     let result = await db.query(`select id from user where username = '${user.username}'`)
 
-    let id = getId()
+    let id = getId(4)
 
     let userId = result[0].id
     let goodsId = ctx.request.fields.goodsId
 
     try {
-        let isAdd = await db.query(`select id, goodsNum from shoppingCart where goodsId = ${goodsId} and userId = ${userId} `)
+        let isAdd = await db.query(`select id, goodsNum from shoppingcart where goodsId = ${goodsId} and userId = ${userId} `)
         if (isAdd.length !== 0) {
             let goodsNum = isAdd[0].goodsNum + 1
             id = isAdd[0].id
-            let result = await db.query(`update shoppingCart set goodsNum = ${goodsNum} where id = ${id}`)
+            let result = await db.query(`update shoppingcart set goodsNum = ${goodsNum} where id = ${id}`)
             if (result.length !== 0) {
                 ctx.body = {
                     code: 0,
@@ -305,6 +303,15 @@ router.get('/address', async ctx => {
 
     try {
         let result = await db.query(`select * from address where userId = ${userId}`)
+        if(result.length){
+            for(let i=0;i<result.length;i++){
+                result[i].province = result[i].address.split(' ')[0]
+                result[i].detail = result[i].address.split(' ')[1]
+            }
+        }
+        
+        
+        console.log(result)
         ctx.body = result
     } catch (error) {
         console.log(error)
@@ -313,26 +320,18 @@ router.get('/address', async ctx => {
 })
 // 修改/增加 地址
 router.post('/modifyAddress', async ctx => {
-    function getId() {
-        var id = Math.ceil(Math.random() * 10000)
-        if (id.toString().length !== 4) {
-            getId()
-        } else {
-            return id
-        }
-    }
     let token = ctx.request.header.authorization
     let jwt = new Jwt(token)
     let user = await jwt.verifyToken()
     let result = await db.query(`select id from user where username = '${user.username}'`)
     let userId = result[0].id
-    let id = getId()
+    let id = getId(4)
 
     const address = ctx.request.fields.address
     console.log(address)
     try {
         if (address.type === 0) {
-            let result = await db.query(`update address set receiver = '${address.receiver}', phone=${address.phone }, address='${address.address}' where userId=${userId} and id=${address.id}`)
+            let result = await db.query(`update address set receiver = '${address.receiver}', phone='${address.phone }', address='${address.province+' '+address.detail}' where userId=${userId} and id=${address.id}`)
             if (result.length !== 0) {
                 ctx.body = {
                     code: 0,
@@ -340,7 +339,7 @@ router.post('/modifyAddress', async ctx => {
                 }
             }
         } else if (address.type === 1) {
-            let result = await db.query(`insert into address (id, receiver, phone, address, userId) value(?, ?, ?, ?, ?)`, [id, address.receiver, address.phone, address.address, userId])
+            let result = await db.query(`insert into address (id, receiver, phone, address, userId) value(?, ?, ?, ?, ?)`, [id, address.receiver, address.phone, address.province+' '+address.detail, userId])
             if (result.length !== 0) {
                 ctx.body = {
                     code: 0,
@@ -399,7 +398,7 @@ router.post('/modifyPass', async ctx => {
     console.log('1')
     if (oldPass !== password) {
         ctx.body = {
-            code: 0,
+            code: 1,
             msg: '请输入正确的密码'
         }
         return
@@ -449,20 +448,12 @@ router.get('/comment', async ctx => {
 })
 // 添加评论
 router.post('/comment', async ctx => {
-    function getId() {
-        var id = Math.ceil(Math.random() * 10000)
-        if (id.toString().length !== 4) {
-            getId()
-        } else {
-            return id
-        }
-    }
     let token = ctx.request.header.authorization
     let jwt = new Jwt(token)
     let user = await jwt.verifyToken()
     let result = await db.query(`select id, username from user where username = '${user.username}'`)
 
-    let id = getId()
+    let id = getId(4)
     let username = result[0].username
     let {
         content,
@@ -549,18 +540,7 @@ router.get('/orders', async ctx => {
 })
 // 添加订单
 router.post('/addOrder', async ctx => {
-    function getId() {
-        var id = Math.ceil(Math.random() * 10000)
-        if (id.toString().length !== 4) {
-            getId()
-        } else {
-            return id
-        }
-    }
-
-
-
-    let id = getId()
+    let id = getId(4)
     let token = ctx.request.header.authorization
     let jwt = new Jwt(token)
     let user = await jwt.verifyToken()
@@ -593,7 +573,7 @@ router.post('/addOrder', async ctx => {
         }
         return
     }
-
+    console.log(goodsList)
     try {
         let result = await db.query(`insert into orders (id, categoryId, addressId, createTime, userId, count) value(?, ?, ?, ?, ?, ?)`,
             [id, id + 9, address.id, new Date(), userId, totalMoney])
@@ -602,6 +582,8 @@ router.post('/addOrder', async ctx => {
                 [id + i, goodsList[i].goodsId, goodsList[i].goodsName, goodsList[i].goodsPrice, goodsList[i].image, goodsList[i].goodsNum * goodsList[i].goodsPrice, id + 9, goodsList[i].goodsNum, goodsList[i].goodsDes])
             // 清空购物车
             let delResult = await db.query(`delete from shoppingcart where goodsId = ${goodsList[i].goodsId} `)
+            // 改变库存与购买数量
+            await db.query(`update goods set stock=${goodsList[i].stock}-${goodsList[i].goodsNum}, saleNum=${goodsList[i].saleNum}+${goodsList[i].goodsNum} where goodsId=${goodsList[i].goodsId}`)
         }
         await db.query(`update user set wallet = ${wallet - totalMoney} where id=${userId}`)
         ctx.body = {
@@ -617,8 +599,6 @@ router.post('/addOrder', async ctx => {
         console.log(error)
     }
 })
-
-
 
 
 

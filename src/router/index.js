@@ -6,15 +6,11 @@ const getCode = require('../../libs/email_config/index')
 const Jwt = require('../../libs/token/index')
 const { getId } = require('../../libs/getId/index')
 
-router.get('/', async ctx => {
-    let data = await db.query('select * from test')
-    data[0].content = data[0].content.split(',')
-    ctx.body = data
+router.get('/test', async ctx => {
+
+    ctx.body = '欢迎光临'
 })
 
-router.get('/haha', ctx => {
-    ctx.body = 'haha'
-})
 // 登录
 router.post('/login', async ctx => {
     let data = ctx.request.fields
@@ -32,7 +28,6 @@ router.post('/login', async ctx => {
     if (md5Pass === result[0].password) {
         let jwt = new Jwt(data) // 传参类型是对象
         let token = jwt.generateToken()
-        console.log(token)
         ctx.body = {
             code: 0,
             msg: '登录成功',
@@ -88,7 +83,7 @@ router.post('/register', async ctx => {
     // 加密密码
     let crypto = new Ctypto(data.password)
     let md5Pass = crypto.md5()
-    let result = await db.query(`update user set username = '${data.username}',wallet = 0 ,password = '${md5Pass}', code = '', date = ${Date.now()}, isLive = 'yes' where email = '${data.email}'`)
+    let result = await db.query(`update user set username = '${data.username}',wallet = 99999 ,password = '${md5Pass}', code = '', date = ${Date.now()}, isLive = 'yes' where email = '${data.email}'`)
     if (result.length !== 0) {
         ctx.body = {
             code: 0,
@@ -100,12 +95,10 @@ router.post('/register', async ctx => {
 // 获取验证码
 router.post('/getCode', async ctx => {
     let data = ctx.request.fields
-    console.log(data)
     let id = Math.floor(Math.random() * 10000)
     // 查找有无重复用户
     let noemail = await db.query(`select isLive, email from user where email = '${data.email}'`)
     let n = JSON.parse(JSON.stringify(noemail))[0] || []
-    console.log(n)
     if (n.length !== 0) {
         if (n.email.length !== 0 && n.isLive == 'yes') {
             ctx.body = {
@@ -133,7 +126,6 @@ router.post('/getCode', async ctx => {
 // 商品列表
 router.get('/goodslist', async ctx => {
     let result = await db.query('select * from goods')
-
     ctx.body = result
 })
 // 分类数据
@@ -168,7 +160,6 @@ router.get('/goodsDetail', async ctx => {
     try {
         let data = await db.query(`select * from goods where goodsId = ${goodsId}`)
         data[0].detail = data[0].detail.split(',')
-        console.log(data[0].detail)
         ctx.body = data
     } catch (error) {
         ctx.body = {
@@ -479,6 +470,7 @@ router.get('/getuserinfo', async ctx => {
     let token = ctx.request.header.authorization
     let jwt = new Jwt(token)
     let user = await jwt.verifyToken()
+    
     let result = await db.query(`select * from user where username = '${user.username}'`)
     ctx.body = result
 
@@ -573,7 +565,6 @@ router.post('/addOrder', async ctx => {
         }
         return
     }
-    console.log(goodsList)
     try {
         let result = await db.query(`insert into orders (id, categoryId, addressId, createTime, userId, count) value(?, ?, ?, ?, ?, ?)`,
             [id, id + 9, address.id, new Date(), userId, totalMoney])
